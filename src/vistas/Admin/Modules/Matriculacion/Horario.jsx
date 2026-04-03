@@ -7,7 +7,7 @@ import '../../Styles/Horario.css'
 
 const diasSemana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
-const Horario = ({ materiasSeleccionadas, setMateriasSeleccionadas, jornada, nivel }) => {
+const Horario = ({ materiasSeleccionadas, setMateriasSeleccionadas, jornada, nivel, setAsignaciones }) => {
 
     const API_URL = import.meta.env.VITE_URL_DEL_BACKEND;
     const token = localStorage.getItem("token")
@@ -64,7 +64,15 @@ const Horario = ({ materiasSeleccionadas, setMateriasSeleccionadas, jornada, niv
                 axios.delete(`${API_URL}/inscripcion/eliminar/${inscripcion.ID}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 }).then(() => {
-                    console.log("este no tiene ID", inscripcion.Asignacion)
+                    if (setAsignaciones) {
+                        setAsignaciones((prevData) =>
+                            prevData.map((item) =>
+                                item.ID === inscripcion.Asignacion.ID
+                                    ? { ...item, cupos: item.cupos + 1 }
+                                    : item
+                            )
+                        );
+                    }
 
                     setMateriasSeleccionadas((prevData) =>
                         prevData.filter((d) => d.Asignacion && d.Asignacion.ID !== inscripcion.Asignacion.ID)
@@ -77,11 +85,10 @@ const Horario = ({ materiasSeleccionadas, setMateriasSeleccionadas, jornada, niv
     };
 
     const obtenerMateria = (dia, bloqueHora) => {
-        // bloqueHora viene como "07:00 - 07:45"
         const [inicioBloque, finBloque] = bloqueHora.split(" - ");
 
-        // Convertir a minutos
         const toMin = (h) => {
+            if (!h) return null;
             const [HH, MM] = h.split(":").map(Number);
             return HH * 60 + MM;
         };
@@ -90,15 +97,41 @@ const Horario = ({ materiasSeleccionadas, setMateriasSeleccionadas, jornada, niv
         const finB = toMin(finBloque);
 
         return materiasSeleccionadas.find((inscripcion) => {
-            const { horaInicio, horaFin, dias } = inscripcion.Asignacion;
+            const {
+                horaInicio,
+                horaFin,
+                hora1,
+                hora2,
+                dias
+            } = inscripcion.Asignacion;
 
-            const inicioA = toMin(horaInicio);
-            const finA = toMin(horaFin);
+            // 1️⃣ Validar día
+            const indexDia = dias.indexOf(dia);
+            if (indexDia === -1) return false;
 
-            // 1. Verificar día
-            if (!dias.includes(dia)) return false;
+            let inicioA, finA;
 
-            // 2. Verificar si el bloque está dentro del rango del horario asignado
+            // 2️⃣ Decidir horario
+            if (hora1 && hora2) {
+                // Hay horarios distintos para cada día
+                if (indexDia === 0) {
+                    inicioA = toMin(horaInicio);
+                    finA = toMin(horaFin);
+                } else if (indexDia === 1) {
+                    inicioA = toMin(hora1);
+                    finA = toMin(hora2);
+                } else {
+                    return false;
+                }
+            } else {
+                // Horario único para todos los días
+                inicioA = toMin(horaInicio);
+                finA = toMin(horaFin);
+            }
+
+            if (inicioA === null || finA === null) return false;
+
+            // 3️⃣ Validar bloque horario
             return inicioB >= inicioA && finB <= finA;
         });
     };

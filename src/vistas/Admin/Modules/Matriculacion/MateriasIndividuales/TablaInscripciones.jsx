@@ -1,7 +1,6 @@
 import React from 'react'
-import { FaTrash } from 'react-icons/fa'; // Importar íconos
-function TablaInscripciones({inscripciones,OnDelete}) {
-    console.log("estas son las inscripciones en tabla",inscripciones)
+import { FaTrash, FaEdit } from 'react-icons/fa';
+function TablaInscripciones({inscripciones,OnDelete,OnEdit}) {
   return (
     <div className="Contenedor-tabla">
                     {inscripciones.length === 0 ? (
@@ -28,8 +27,17 @@ function TablaInscripciones({inscripciones,OnDelete}) {
                                         <td className='tabla-celda'>{item.Asignacion.Materia.nombre}</td>
                                         <td className='tabla-celda'>{`${item.Asignacion.Docente.primer_nombre} ${item.Asignacion.Docente.primer_apellido}`}</td>
                                         <td className='tabla-celda'>{`${item.Asignacion.dias[0]} ${item.Asignacion.horaInicio}-${item.Asignacion.horaFin}`}</td>
-                                        <td className='tabla-celda'>{`${item.Asignacion.dias[1]} ${item.Asignacion.hora1}-${item.Asignacion.hora2}`}</td>
+                                        <td className='tabla-celda'>
+                                            {item.Asignacion.hora1 && item.Asignacion.hora2 
+                                                ? `${item.Asignacion.dias[1]} ${item.Asignacion.hora1}-${item.Asignacion.hora2}` 
+                                                : "-"}
+                                        </td>
                                         <td className='botones-icon'>
+                                            <FaEdit
+                                                size={20}
+                                                className="icon edit-icon"
+                                                onClick={()=>OnEdit(item)}
+                                            />
                                             <FaTrash
                                                 size={20}
                                                 className="icon delete-icon"
@@ -42,9 +50,6 @@ function TablaInscripciones({inscripciones,OnDelete}) {
                         </table>
     
                     )}
-    
-    
-    
                 </div>
   )
 }

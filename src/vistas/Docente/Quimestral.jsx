@@ -7,14 +7,14 @@ import { ErrorMessage } from "../../Utils/ErrorMesaje";
 import { calcularPromedioQuimestral, calcularPromedioComportamiento, calcularValoracionComportamiento, abreviarNivel } from "./Promedios";
 import "./Parcial.css";
 
-const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actualizarDatosQuim, datosModulo, inputsDisabled, onEditar, isWithinRange, rangoTexto, forceEdit, soloLectura, esPorSolicitud, savedKeysQuim, makeKeyQuim, agregarSavedKeyQuim, editingRow, setEditingRow }) => {
+const Quimestral = ({ onGuardarTodoFinished, onGuardarTodo, globalEdit, quimestreSeleccionado, parcial1Data, parcial2Data, actualizarDatosQuim, datosModulo, inputsDisabled, onEditar, isWithinRange, rangoTexto, forceEdit, soloLectura, esPorSolicitud, savedKeysQuim, makeKeyQuim, agregarSavedKeyQuim, editingRow, setEditingRow }) => {
 
   const idContenedor = `pdf-quimestral-quim${quimestreSeleccionado}`;
 
   // Estado que contendrá los datos combinados (por estudiante) provenientes de los parciales
   const [datos, setDatos] = useState([]);
 
-  
+
   const obtenerEtiquetaQuimestre = () => {
     return quimestreSeleccionado === "1" ? "Q1" : "Q2";
   };
@@ -40,6 +40,13 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
   };
 
   const [datosOriginales, setDatosOriginales] = useState([]);
+
+  const getInscripcionId = (row) => row?.id_inscripcion ?? row?.idInscripcion;
+  const getPromedioParcial = (row) => {
+    const value = row?.["Promedio Final"] ?? row?.["PROMEDIO PARCIAL"] ?? row?.promedioFinal ?? 0;
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
 
   // Cada vez que lleguen datos de ambos parciales, se combinan
   useEffect(() => {
@@ -69,15 +76,15 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
 
           resultados.forEach(({ asignacion, estudiantes, quimestrales }) => {
             estudiantes.forEach(est => {
-              const p1 = parcial1Data.find(p => p.id_inscripcion === est.idInscripcion) || {};
-              const p2 = parcial2Data.find(p => p.id_inscripcion === est.idInscripcion) || {};
+              const p1 = parcial1Data.find(p => String(getInscripcionId(p)) === String(est.idInscripcion)) || {};
+              const p2 = parcial2Data.find(p => String(getInscripcionId(p)) === String(est.idInscripcion)) || {};
               const saved = quimestrales.find(q =>
-                q.idInscripcion === est.idInscripcion &&
+                String(getInscripcionId(q)) === String(est.idInscripcion) &&
                 q.quimestre === obtenerEtiquetaQuimestre()
               ) || {};
 
-              const parcial1 = parseFloat(p1["Promedio Final"] || 0);
-              const parcial2 = parseFloat(p2["Promedio Final"] || 0);
+              const parcial1 = getPromedioParcial(p1);
+              const parcial2 = getPromedioParcial(p2);
               const notaExamen = saved.examen ?? "";
 
               const { ponderacion70, ponderacion30, promedioFinal } = calcularPromedioQuimestral(parcial1, parcial2, notaExamen);
@@ -135,15 +142,15 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
           const estudiantes = respEstudiantes.data;
           const quimestrales = respQuimestrales.data;
           const nuevosDatos = estudiantes.map(est => {
-            const p1 = parcial1Data.find(p => p.id_inscripcion === est.idInscripcion) || {};
-            const p2 = parcial2Data.find(p => p.id_inscripcion === est.idInscripcion) || {};
+            const p1 = parcial1Data.find(p => String(getInscripcionId(p)) === String(est.idInscripcion)) || {};
+            const p2 = parcial2Data.find(p => String(getInscripcionId(p)) === String(est.idInscripcion)) || {};
             const saved = quimestrales.find(q =>
-              q.idInscripcion === est.idInscripcion &&
+              String(getInscripcionId(q)) === String(est.idInscripcion) &&
               q.quimestre === obtenerEtiquetaQuimestre()
             ) || {};
 
-            const parcial1 = parseFloat(p1["Promedio Final"] || 0);
-            const parcial2 = parseFloat(p2["Promedio Final"] || 0);
+            const parcial1 = getPromedioParcial(p1);
+            const parcial2 = getPromedioParcial(p2);
             const notaExamen = saved.examen ?? "";
 
             const { ponderacion70, ponderacion30, promedioFinal } = calcularPromedioQuimestral(parcial1, parcial2, notaExamen);
@@ -270,7 +277,7 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
   const esFilaDeshabilitada = (row) => {
     // Si es soloLectura, siempre deshabilitado
     if (soloLectura) return true;
-    
+
     // Si la fila está guardada (tiene idQuimestral), está deshabilitada
     // INCLUSO si forceEdit está activo (botón amarillo presionado)
     if (savedKeysQuim && row.idInscripcion) {
@@ -280,27 +287,18 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
         return true;
       }
     }
-    
+
     // Si forceEdit está activo, las NO guardadas están habilitadas
     if (forceEdit) return false;
-    
+
     // Si estamos fuera de rango, deshabilitado
     if (!isWithinRange) return true;
-    
+
     // Si inputsDisabled es true, deshabilitado
     return inputsDisabled;
   };
 
-  const handleGuardar = (rowIndex, rowData, onSuccessCallback) => {
-    if (!rowData.idQuimestral) {
-      Swal.fire({
-        icon: "error",
-        title: "Registro no encontrado",
-        text: "No se puede actualizar porque aún no existe un registro para este estudiante.",
-      });
-      return;
-    }
-
+  const handleGuardar = (rowIndex, rowData, onSuccessCallback, onErrorCallback) => {
     // Validar que el examen esté completo
     if (!rowData["Examen"] || rowData["Examen"] === "") {
       Swal.fire({
@@ -309,18 +307,7 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
         text: "Debes ingresar la nota del examen antes de guardar.",
         confirmButtonText: "OK"
       });
-      return;
-    }
-
-    const original = datosOriginales[rowIndex];
-    const haCambiado = JSON.stringify(rowData) !== JSON.stringify(original);
-
-    if (!haCambiado) {
-      Swal.fire({
-        icon: "info",
-        title: "Sin cambios",
-        text: "No has realizado ningún cambio en esta fila.",
-      });
+      if (onErrorCallback) onErrorCallback("validacion");
       return;
     }
 
@@ -340,6 +327,64 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
       examen,
     };
 
+    // Si no existe idQuimestral, crear el registro; si existe, actualizarlo
+    if (!rowData.idQuimestral) {
+      axios
+        .post(`${import.meta.env.VITE_URL_DEL_BACKEND}/quimestrales`, body)
+        .then((response) => {
+          Swal.fire({
+            icon: "success",
+            title: "Creado",
+            text: "La nota del examen quimestral se guardó correctamente.",
+          });
+          // Actualizar el idQuimestral en la fila
+          const nuevoIdQuimestral = response.data?.ID || response.data?.id || response.data?.insertId || null;
+          const copia = [...datos];
+          copia[rowIndex] = {
+            ...rowData,
+            idQuimestral: nuevoIdQuimestral
+          };
+          setDatos(copia);
+          const copiaOriginal = [...datosOriginales];
+          copiaOriginal[rowIndex] = JSON.parse(JSON.stringify(copia[rowIndex]));
+          setDatosOriginales(copiaOriginal);
+
+          // Actualizar savedKeysQuim para bloquear la fila
+          if (agregarSavedKeyQuim && makeKeyQuim) {
+            const key = makeKeyQuim({
+              id_inscripcion: rowData.idInscripcion,
+              quimestre: quimestreSeleccionado === "1" ? "Q1" : "Q2"
+            });
+            agregarSavedKeyQuim(key);
+          }
+
+          if (onSuccessCallback) onSuccessCallback();
+        })
+        .catch((error) => {
+          Swal.fire({
+            icon: "error",
+            title: "Error al crear ❌.",
+            text: "No se pudo crear la nota del examen.",
+          });
+          if (onErrorCallback) onErrorCallback(error);
+          ErrorMessage(error);
+        });
+      return;
+    }
+
+    // Si existe idQuimestral, actualizar el registro existente
+    const original = datosOriginales[rowIndex];
+    const haCambiado = JSON.stringify(rowData) !== JSON.stringify(original);
+
+    if (!haCambiado && !globalEdit) {
+      Swal.fire({
+        icon: "info",
+        title: "Sin cambios",
+        text: "No has realizado ningún cambio en esta fila.",
+      });
+      return;
+    }
+
     axios
       .put(`${import.meta.env.VITE_URL_DEL_BACKEND}/quimestrales/${rowData.idQuimestral}`, body)
       .then(() => {
@@ -351,7 +396,7 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
         const copia = [...datosOriginales];
         copia[rowIndex] = JSON.parse(JSON.stringify(rowData));
         setDatosOriginales(copia);
-        
+
         // Actualizar savedKeysQuim para bloquear la fila inmediatamente sin recargar
         if (agregarSavedKeyQuim && makeKeyQuim) {
           const key = makeKeyQuim({
@@ -359,11 +404,11 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
             quimestre: quimestreSeleccionado === "1" ? "Q1" : "Q2"
           });
           agregarSavedKeyQuim(key);
-          
+
           // Forzar re-render
           setDatos([...datos]);
         }
-        
+
         // Solo resetear editingRow si el guardado fue exitoso
         if (onSuccessCallback) onSuccessCallback();
       })
@@ -373,10 +418,54 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
           title: "Error al actualizar ❌.",
           text: "No se pudo actualizar la nota del examen.",
         });
+        if (onErrorCallback) onErrorCallback(error);
         ErrorMessage(error);
       });
   };
+  const handleGuardarAsync = (i, fila) => {
+    return new Promise((resolve, reject) => {
+      handleGuardar(i, fila, resolve, reject);
+    });
+  };
+  useEffect(() => {
+    if (onGuardarTodo) {
+      onGuardarTodo(handleGuardarTodo);
+    }
+  }, [datos]);
 
+  const handleGuardarTodo = async () => {
+    let errores = [];
+    let exitos = [];
+
+    for (const [i, fila] of datos.entries()) {
+      try {
+        await handleGuardarAsync(i, fila);
+        exitos.push(i);
+      } catch {
+        errores.push(i);
+      }
+    }
+
+    if (errores.length === 0) {
+      Swal.fire({
+        icon: "success",
+        title: "Guardado completo",
+        text: "Todas las filas se guardaron correctamente ✅",
+      });
+
+      // 🔥 AQUÍ
+      if (onGuardarTodoFinished) onGuardarTodoFinished();
+
+    } else {
+      Swal.fire({
+        icon: "warning",
+        title: "Guardado parcial",
+        text: `Se guardaron ${exitos.length} filas, pero ${errores.length} estan incompletas.`,
+      });
+    }
+    if (onGuardarTodoFinished) onGuardarTodoFinished();
+
+  };
   const handleEliminar = (rowIndex, rowData) => {
     if (!rowData.idQuimestral) {
       Swal.fire({
@@ -419,10 +508,10 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
                 }
                 return fila;
               });
-              
+
               setDatos(nuevosDatos);
               setDatosOriginales(JSON.parse(JSON.stringify(nuevosDatos)));
-              
+
               // Remover de savedKeys
               if (savedKeysQuim && makeKeyQuim) {
                 const key = makeKeyQuim({
@@ -458,11 +547,13 @@ const Quimestral = ({ quimestreSeleccionado, parcial1Data, parcial2Data, actuali
         </div>
       )}
       <Tabla
+        habilitarTodasFilas={globalEdit}
         columnasAgrupadas={columnasAgrupadas}
         columnas={columnas}
         datos={datos}
         onChange={handleInputChange}
         columnasEditables={columnasEditables}
+        columnasColorear={columnasEditables}
         inputsDisabled={inputsDisabled}
         onEditar={onEditar}
         onGuardar={handleGuardar}
