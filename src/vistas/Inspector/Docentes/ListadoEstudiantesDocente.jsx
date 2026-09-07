@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import axios from "axios";
 import HeaderTabla from "../../../components/HeaderTabla";
 import Tabla from "../../../components/Tabla";
+import { exportarListadoAExcel } from "../../../Utils/FuncionesParaListados"; // <-- Importamos desde el archivo externo
 
 function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
   const [loading, setLoading] = useState(true);
@@ -10,7 +11,6 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
   const token = localStorage.getItem("token");
   const API_URL = import.meta.env.VITE_URL_DEL_BACKEND;
 
-  // Función para formatear el horario como texto plano (Ideal para la tabla y el futuro PDF)
   const formatHorarioString = (curso) => {
     if (!curso.dias || !curso.horaInicio || !curso.horaFin) return 'Horario no definido';
     if (curso.tipo?.toLowerCase() === 'individual' && Array.isArray(curso.dias) && curso.dias.length === 2 && curso.hora1 && curso.hora2) {
@@ -26,7 +26,6 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
     const fetchEstudiantes = async () => {
       try {
         setLoading(true);
-        // Hacemos un Promise.all para buscar los estudiantes de TODAS las asignaciones de esta tarjeta
         const promesas = datosTarjeta.asignaciones.map(asig => 
           axios.get(`${API_URL}/inscripcion/asignacion/${asig.ID}`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -34,23 +33,20 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
         );
         
         const resultados = await Promise.all(promesas);
-        
         let estudiantesCombinados = [];
         
-        // Iteramos sobre las respuestas y le inyectamos a cada estudiante su horario respectivo
         resultados.forEach((res, index) => {
           const asignacionOrigen = datosTarjeta.asignaciones[index];
-          const listaEstudiantes = res.data || []; // Ajusta según cómo devuelve tu API
+          const listaEstudiantes = res.data || [];
           
           listaEstudiantes.forEach(est => {
             estudiantesCombinados.push({
               ...est,
-              Horario: formatHorarioString(asignacionOrigen) // Inyectamos el horario
+              Horario: formatHorarioString(asignacionOrigen)
             });
           });
         });
 
-        // Opcional: Ordenar alfabéticamente por si se mezclaron individuales
         estudiantesCombinados.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
 
         if (mounted) {
@@ -70,13 +66,12 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
     return () => { mounted = false; };
   }, [datosTarjeta, API_URL, token]);
 
-  // Si es Individual agregamos la columna "Horario"
   const columnas = datosTarjeta.tipo === 'Individual' ? ["Horario"] : [];
 
   const tablaFormateada = estudiantes.map((e, index) => {
     const fila = {
-      "Nro": index + 1, // Recalculamos el Nro porque combinamos listas
-      "Nómina de Estudiantes": e.nombre || `${e.apellidos} ${e.nombres}` // Ajusta al campo real de tu BD
+      "Nro": index + 1,
+      "Nómina de Estudiantes": e.nombre || `${e.apellidos} ${e.nombres}`
     };
     if (datosTarjeta.tipo === 'Individual') {
       fila["Horario"] = e.Horario;
@@ -84,7 +79,6 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
     return fila;
   });
 
-  // Configuración del HeaderTabla dependiendo del tipo de curso
   const getDatosEncabezado = () => {
     const infoBasica = {
       "Profesor": datosTarjeta.docente,
@@ -106,9 +100,16 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
     };
   };
 
+  const handleExportar = () => {
+    exportarListadoAExcel(
+      tablaFormateada, 
+      getDatosEncabezado(), 
+      `Listado_${datosTarjeta.materia.replace(/\s+/g, '_')}_${datosTarjeta.tipo}.xlsx`
+    );
+  };
+
   return (
     <div className="d-flex flex-column h-100 bg-white border rounded shadow-sm p-4">
-      {/* Barra superior con Regresar y Exportar */}
       <div className="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <button
           className="btn btn-outline-secondary d-flex align-items-center gap-2 px-3"
@@ -121,8 +122,8 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
         <div className="d-flex align-items-center gap-2">
           <span className="text-muted fw-bold" style={{ fontSize: '14px' }}>Exportaciones:</span>
           <button
-            className="btn btn-success btn-sm"
-            onClick={() => console.log("Exportar Excel Pendiente")}
+            className="btn btn-success btn-sm d-flex align-items-center gap-2"
+            onClick={handleExportar}
             title="Exportar a Excel"
           >
             <i className="bi bi-file-earmark-excel-fill"></i> Exportar Excel
@@ -149,7 +150,7 @@ function ListadoEstudiantesDocente({ datosTarjeta, onBack }) {
             mostrarGuardar={false}
             clasePersonalizada="tabla-listado mt-3"
             soloLectura={true}
-            encabezadosVerticales={false} // Aseguramos que los encabezados sean verticales
+            encabezadosVerticales={false} 
           />
         </div>
       )}

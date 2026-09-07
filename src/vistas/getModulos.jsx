@@ -53,7 +53,8 @@ export const getModulos = (subRol, includeInicio = false) => {
         { id: 4, titulo: "Materias Individuales", icono: "👥", link: "/profesor/materias" },
         { id: 5, titulo: "Cambiar contraseña", icono: "🔐", link: "/profesor/password" },
         { id: 6, titulo: "Matriculacion materias grupales", icono: "✏️", link: "/admin/matriculacion" },
-        { id: 7, titulo: "Docentes", icono: <ImUserTie />, link: "/inspector/docentes" }
+        { id: 7, titulo: "Docentes", icono: <ImUserTie />, link: "/inspector/docentes" },
+        { id: 8, titulo: "Estudiantes", icono: "👨‍🎓", link: "/admin/estudiantes" }
       ];
       break;
     default:
